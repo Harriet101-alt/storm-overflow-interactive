@@ -1,0 +1,105 @@
+:root {
+  --ink: #1f2428;
+  --muted: #5b646b;
+  --panel: rgba(255, 255, 255, 0.94);
+  --line: #d9dee2;
+  --accent: #2f6f8f;
+  --spill: #8a5a1c;
+  --spill-soft: rgba(138, 90, 28, 0.14);
+  --works: #6b7780;
+  --rain: #5d8fb0;
+  --radius: 10px;
+}
+
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background: #dfe3e6;
+  font-size: 14px;
+}
+
+#view { position: absolute; inset: 0; }
+
+#panel {
+  position: absolute;
+  top: 16px; left: 16px; bottom: 16px;
+  width: 360px;
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.16);
+  padding: 18px 18px 12px;
+  box-sizing: border-box;
+}
+
+h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 8px; font-weight: 600; display: flex; justify-content: space-between; }
+header p, footer p { margin: 0; color: var(--muted); line-height: 1.4; }
+section { border-top: 1px solid var(--line); padding: 14px 0; }
+header { padding-bottom: 12px; }
+
+button, select {
+  font: inherit; color: var(--ink);
+  border: 1px solid var(--line); background: #fff;
+  border-radius: 8px; padding: 6px 10px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.presets button { text-align: left; }
+.presets small { display: block; font-size: 11px; opacity: 0.75; }
+
+.slider { display: block; margin: 8px 0; }
+.slider output { float: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.ground { border: 0; padding: 0; margin: 8px 0 0; }
+.ground legend { padding: 0; margin-bottom: 4px; }
+.ground label { display: block; margin: 2px 0; }
+
+.clock { font-variant-numeric: tabular-nums; color: var(--ink); letter-spacing: 0; text-transform: none; font-size: 15px; }
+.play-row { display: flex; gap: 8px; margin-bottom: 6px; }
+.play-row button { flex: 1; }
+
+.readouts { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 10px 0 0; }
+.readouts dt { color: var(--muted); }
+.readouts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.monitor { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #eef2f4; display: flex; flex-direction: column; gap: 2px; }
+.monitor-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+#monitor { font-weight: 600; font-size: 16px; }
+.monitor.spilling { background: var(--spill-soft); }
+.monitor.spilling #monitor { color: var(--spill); }
+
+#chart { width: 100%; height: auto; display: block; }
+.chart-rain { stroke: var(--rain); stroke-width: 1; }
+.chart-works { fill: none; stroke: var(--works); stroke-width: 1.5; }
+.chart-spill { fill: none; stroke: var(--spill); stroke-width: 2; }
+.chart-spill-band { fill: var(--spill-soft); }
+.chart-axis { stroke: var(--line); }
+.chart-label { font-size: 9px; fill: var(--muted); }
+.chart-cursor { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.key { font-size: 11px; color: var(--muted); margin: 4px 0 0; }
+.key span { display: inline-block; width: 12px; height: 3px; margin: 0 4px 2px 6px; vertical-align: middle; }
+.key .k-rain { background: var(--rain); margin-left: 0; }
+.key .k-works { background: var(--works); }
+.key .k-spill { background: var(--spill); }
+.key .k-band { background: var(--spill-soft); height: 10px; }
+
+.views { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.labels-toggle { margin-left: auto; }
+footer { padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
+
+#error {
+  position: absolute; right: 16px; top: 16px; max-width: 420px;
+  background: #fff4f4; color: #8a1c1c; border: 1px solid #e3b5b5;
+  padding: 12px 14px; border-radius: 8px;
+}
+
+@media (max-width: 700px) {
+  #panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 52vh; border-radius: var(--radius) var(--radius) 0 0; }
+}
+
+.embed #panel header h1 { display: none; }

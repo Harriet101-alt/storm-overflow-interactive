@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Why Overflows Spill</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/5.1/esri/themes/light/main.css" />
+  <script type="module" src="https://js.arcgis.com/5.1/"></script>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="top">
+    <h1>Why do some places' storm overflows spill for longer?</h1>
+    <p>Rainfall plus the share of overflows at sewage treatment works explains about half the difference between catchments (53%).
+       Rainfall alone explains 14%. The pressure index, built on rainfall, paved area and residents per overflow, explains 3%.</p>
+  </header>
+
+  <main class="layout">
+    <div id="map" aria-label="Map of England's river catchments"></div>
+
+    <aside class="side">
+      <section>
+        <h2>Colour the map by</h2>
+        <p class="hint">The bars show how closely each one tracks spill hours. A longer bar means a stronger link.</p>
+        <div id="measures" class="measures"></div>
+        <p class="footnote">* Reported by the water companies in their 2024-2025 reviews of high-spilling overflows.</p>
+      </section>
+
+      <section>
+        <div class="mode" role="group" aria-label="Map style">
+          <button id="mode-single" type="button" aria-pressed="true">On its own</button>
+          <button id="mode-bivariate" type="button" aria-pressed="false">Against spill hours</button>
+        </div>
+        <p id="measure-text" class="measure-text"></p>
+        <div id="legend" class="legend"></div>
+      </section>
+
+      <section>
+        <div id="scatter-wrap">
+          <svg id="scatter" role="img" aria-label="Scatter chart of the chosen measure against spill hours"></svg>
+          <p id="scatter-caption" class="caption"></p>
+        </div>
+        <div id="top-list" class="top-list" hidden></div>
+      </section>
+
+      <footer>
+        Spills: Environment Agency EDM annual returns 2021-2025. Rainfall: Met Office HadUK-Grid. Paved area: Copernicus.
+        Aquifers: British Geological Survey. Catchments: Environment Agency WFD Cycle 3. Contains public sector information licensed under the
+        Open Government Licence v3.0. Associations across catchments, not causes.
+      </footer>
+    </aside>
+  </main>
+
+  <div id="profile" class="profile" hidden></div>
+  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="error" role="alert" hidden></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
