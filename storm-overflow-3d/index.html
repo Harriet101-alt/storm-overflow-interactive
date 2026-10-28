@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>When it rains, it spills</title>
+  <title>Storm overflow 3D</title>
   <link rel="stylesheet" href="https://js.arcgis.com/5.1/esri/themes/light/main.css" />
   <script type="module" src="https://js.arcgis.com/5.1/"></script>
   <link rel="stylesheet" href="css/style.css" />
@@ -12,11 +12,6 @@
   <div id="view" aria-label="3D cutaway of a storm overflow"></div>
 
   <aside id="panel">
-    <header>
-      <h1>When it rains, it spills</h1>
-      <p>Choose a storm, then play it. Watch the water rise in the overflow chamber, top the weir and spill to the river.</p>
-    </header>
-
     <section aria-labelledby="storm-heading">
       <h2 id="storm-heading">Storm</h2>
       <div id="presets" class="presets"></div>
@@ -34,7 +29,7 @@
     </section>
 
     <section aria-labelledby="now-heading">
-      <h2 id="now-heading">Now <span id="clock" class="clock"></span></h2>
+      <h2 id="now-heading">Time <span id="clock" class="clock"></span></h2>
       <div class="play-row">
         <button id="play" type="button" aria-pressed="false">Play</button>
         <select id="speed" aria-label="Playback speed">
@@ -44,27 +39,6 @@
         </select>
       </div>
       <input id="time" type="range" min="0" max="719" value="0" aria-label="Time" />
-      <dl class="readouts">
-        <dt>Rain</dt><dd id="rain-now"></dd>
-        <dt>To the treatment works</dt><dd id="to-works"></dd>
-        <dt>Spilling to the river</dt><dd id="to-river"></dd>
-        <dt>Street</dt><dd id="street"></dd>
-      </dl>
-      <div id="monitor-box" class="monitor" role="status">
-        <span class="monitor-title">Overflow monitor (EDM)</span>
-        <span id="monitor"></span>
-      </div>
-    </section>
-
-    <section aria-labelledby="run-heading">
-      <h2 id="run-heading">This storm</h2>
-      <svg id="chart" role="img" aria-label="Rain, flow to the works and spill over the 12 hours"></svg>
-      <p class="key"><span class="k-rain"></span>rain <span class="k-works"></span>to works <span class="k-spill"></span>spill <span class="k-band"></span>monitor logs a spill</p>
-      <dl class="readouts">
-        <dt>Spill duration logged</dt><dd id="total-spill"></dd>
-        <dt>Counted spills (EA 12/24 rule)</dt><dd id="total-counted"></dd>
-        <dt>Spill volume (not measured by EDM)</dt><dd id="total-volume"></dd>
-      </dl>
     </section>
 
     <section class="views" aria-label="Views">
@@ -74,11 +48,16 @@
       <button type="button" data-view="outfall">Outfall</button>
       <label class="labels-toggle"><input id="labels" type="checkbox" checked /> Labels</label>
     </section>
-
-    <footer>
-      <p id="note"></p>
-    </footer>
   </aside>
+
+  <!-- ?compact: a slim icon bar in place of the panel, for small embeds -->
+  <div id="mini" class="mini" data-status="dry">
+    <div id="mini-storms" class="mini-storms" role="group" aria-label="Storm"></div>
+    <button id="mini-play" class="icon" type="button" aria-label="Play" aria-pressed="false"></button>
+    <input id="mini-time" type="range" min="0" max="719" value="0" aria-label="Time" />
+    <span class="mini-status" role="status"><i aria-hidden="true"></i><span id="mini-status-text"></span></span>
+    <button id="mini-labels" class="icon" type="button" aria-label="Labels" title="Labels" aria-pressed="true"></button>
+  </div>
 
   <div id="error" role="alert" hidden></div>
   <script type="module" src="js/app.js"></script>

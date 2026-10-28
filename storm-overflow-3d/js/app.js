@@ -1,9 +1,8 @@
 // The 3D scene: the cutaway's static geometry (data/structure.json), the moving water from the
 // storage model (model.js, geometry.js), the SDK's rain, and the controls.
 
-import { drawChart } from "./chart.js";
 import { LIFT, ORIGIN, toLonLat, waterAt } from "./geometry.js";
-import { GROUND, PRESETS, formatClock, formatDuration, monitorText, simulate, summary } from "./model.js";
+import { GROUND, PRESETS, STORM_START, formatClock, monitorText, simulate } from "./model.js";
 
 const [
   Map, SceneView, Ground, Graphic, GraphicsLayer, Camera, Point, Polygon, SpatialReference, Mesh, MeshComponent,
@@ -40,12 +39,32 @@ const WATER = {
 };
 // Screen heights of the label callouts (px), so the labels around the chamber do not overlap.
 const LABEL_OFFSETS = { "Weir": 18, "Screen": 48, "To the treatment works": 80, "Event duration monitor (EDM)": 40 };
+// ?compact keeps only these labels, shortened to one word.
+const SHORT_LABELS = {
+  "Combined sewer: sewage and rainwater share one pipe": "Sewer", "To the treatment works": "To works", "Weir": "Weir",
+  "Event duration monitor (EDM)": "Monitor", "River": "River",
+};
+const CLOUD = '<path d="M7 14h10.5a3.5 3.5 0 0 0 .3-7 5.5 5.5 0 0 0-10.6 1.2A3 3 0 0 0 7 14z"/>';
+const ICONS = {
+  drizzle: `${CLOUD}<path d="M12 17v2"/>`,
+  steady: `${CLOUD}<path d="M9.5 17v2M14.5 17v2"/>`,
+  shower: `${CLOUD}<path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/>`,
+  thunder: `${CLOUD}<path d="M13 15l-3 4h4l-2 3"/>`,
+  play: '<path class="solid" d="M8 5.5v13l10.5-6.5z"/>',
+  pause: '<path class="solid" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>',
+  labels: '<path d="M4 5h16v10H10l-4 4v-4H4z"/>',
+};
+const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+const LOOP_PAUSE_MS = 2000;
 const NO_EDGES = new Set(["subsoil", "topsoil", "grass", "tree_crown", "road_marking"]);
 const ROUGHNESS = { metal: 0.45, window: 0.15, sensor: 0.5, asphalt: 0.9, slate: 0.7 };
 
 const $ = (id) => document.getElementById(id);
-// ?embed: inside a StoryMap the story supplies the title, so the panel drops its heading.
-if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
+const params = new URLSearchParams(location.search);
+// ?compact: for a small box (e.g. an Experience Builder Embed widget): icon bar, one-word labels, storm on a loop.
+const COMPACT = params.has("compact");
+if (COMPACT) document.body.classList.add("compact");
+const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const state = { records: [], minute: 0, playing: false, speed: "normal", intensity: 25, hours: 1, ground: "dry" };
 
 function material(color, name) {
@@ -95,7 +114,6 @@ function camera(name) {
 async function main() {
   const structure = await (await fetch("data/structure.json")).json();
   const d = structure.dimensions;
-  $("note").textContent = `${structure.note} Flows come from a simple storage model, not a hydraulic model.`;
 
   const staticLayer = new GraphicsLayer({ title: "Model" });
   for (const [name, part] of Object.entries(structure.meshes)) {
@@ -108,12 +126,14 @@ async function main() {
   const surfaceLayer = new GraphicsLayer({ title: "Water surfaces", elevationInfo: { mode: "absolute-height" } });
   const labelLayer = new GraphicsLayer({ title: "Labels", elevationInfo: { mode: "absolute-height" } });
   for (const label of structure.labels) {
+    const text = COMPACT ? SHORT_LABELS[label.text] : label.text;
+    if (!text) continue;
     const [longitude, latitude, z] = toLonLat(label.x, label.y, label.z);
     labelLayer.add(new Graphic({
       geometry: new Point({ longitude, latitude, z, spatialReference: WGS84 }),
       symbol: new PointSymbol3D({
         symbolLayers: [new TextSymbol3DLayer({
-          text: label.text, size: 11, material: { color: [33, 37, 41] },
+          text, size: 11, material: { color: [33, 37, 41] },
           halo: { color: [255, 255, 255, 0.85], size: 0.8 }, background: { color: [255, 255, 255, 0.85] },
         })],
         verticalOffset: { screenLength: LABEL_OFFSETS[label.text] ?? 28, maxWorldLength: 6, minWorldLength: 0.4 },
@@ -154,9 +174,10 @@ async function main() {
     ui: { components: [] },  // 5.x widgets are components; no Esri basemap data is shown
   });
   await view.when();
-  // Keep the model clear of the panel (beside it on a wide screen, above it on a phone).
+  // Keep the model clear of the panel (beside it on a wide screen, above it on a phone) or the compact bar.
   const pad = () => {
-    view.padding = window.innerWidth > 700 ? { left: 392 } : { bottom: Math.round(window.innerHeight * 0.52) };
+    view.padding = COMPACT ? { bottom: 48 }
+      : window.innerWidth > 700 ? { left: 392 } : { bottom: Math.round(window.innerHeight * 0.52) };
   };
   pad();
   window.addEventListener("resize", pad);
@@ -165,7 +186,6 @@ async function main() {
     sewage: material(WATER.sewage), storm: material(WATER.storm), spill: material(WATER.spill), river: material(WATER.river),
   };
   let weatherKey = "";
-  let moveCursor = () => {};
 
   function render() {
     const record = state.records[state.minute];
@@ -183,8 +203,8 @@ async function main() {
     }
     updateWeather(record);
     updateReadouts(record);
-    moveCursor(state.minute);
     $("time").value = state.minute;
+    $("mini-time").value = state.minute;
   }
 
   function polygonAt(pointsXY, z) {
@@ -196,33 +216,28 @@ async function main() {
   function updateWeather(record) {
     const records = state.records;
     const nearRain = records.slice(Math.max(0, state.minute - 40), state.minute + 20).some((r) => r.rain > 0);
-    const key = record.rain > 0 ? `rain-${Math.round(Math.min(1, 0.15 + record.rain / 40) * 10)}` : nearRain ? "cloud" : "sun";
+    // Precipitation starts at 0.4 so even light rain shows in the view.
+    const precipitation = Math.min(1, 0.4 + record.rain / 50);
+    const key = record.rain > 0 ? `rain-${Math.round(precipitation * 10)}` : nearRain ? "cloud" : "sun";
     if (key === weatherKey) return;
     weatherKey = key;
     view.environment.weather = record.rain > 0
-      ? new RainyWeather({ cloudCover: 0.85, precipitation: Math.min(1, 0.15 + record.rain / 40) })
+      ? new RainyWeather({ cloudCover: 0.85, precipitation })
       : nearRain ? new CloudyWeather({ cloudCover: 0.7 }) : new SunnyWeather({ cloudCover: 0.2 });
   }
 
   function updateReadouts(record) {
     $("clock").textContent = formatClock(record.clock);
-    $("rain-now").textContent = record.rain > 0 ? `${record.rain.toFixed(record.rain < 10 ? 1 : 0)} mm/h` : "dry";
-    $("to-works").textContent = `${Math.round(record.toWorks * 1000)} L/s`;
-    $("to-river").textContent = record.spill > 0 ? `${Math.round(record.spill * 1000)} L/s` : "none";
-    $("street").textContent = record.floodDepth > 0.003 ? `flooded, ${Math.round(record.floodDepth * 100)} cm` : "clear";
     const monitor = monitorText(state.records, state.minute);
-    $("monitor").textContent = monitor;
-    $("monitor-box").classList.toggle("spilling", record.spilling);
+    $("mini").dataset.status = record.spilling ? "spill" : record.rain > 0 ? "rain" : "dry";
+    $("mini-status-text").textContent = record.spilling ? monitor.replace("Spilling for", "Spilling")
+      : record.rain > 0 ? "Raining" : "Dry";
   }
 
   function rerun() {
     state.records = simulate({ intensity: state.intensity, hours: state.hours, ground: state.ground });
-    const totals = summary(state.records);
-    moveCursor = drawChart($("chart"), state.records, totals.events);
     $("time").max = state.records.length - 1;
-    $("total-spill").textContent = totals.spillMinutes ? formatDuration(totals.spillMinutes) : "no spill";
-    $("total-counted").textContent = String(totals.counted);
-    $("total-volume").textContent = totals.spillVolume ? `${Math.round(totals.spillVolume).toLocaleString()} m³` : "0 m³";
+    $("mini-time").max = state.records.length - 1;
     $("intensity-value").textContent = `${state.intensity} mm/h`;
     $("hours-value").textContent = state.hours < 1 ? `${state.hours * 60} min` : `${state.hours} h`;
     for (const button of document.querySelectorAll("[data-preset]")) {
@@ -232,26 +247,49 @@ async function main() {
     render();
   }
 
-  // Controls.
-  const presets = $("presets");
+  // Controls. In compact mode the storm replays after a short pause until the viewer pauses or scrubs it.
+  let autoLoop = COMPACT && !REDUCED_MOTION;
+  function choosePreset(preset) {
+    state.intensity = preset.intensity;
+    state.hours = preset.hours;
+    $("intensity").value = preset.intensity;
+    $("hours").value = preset.hours;
+    state.minute = STORM_START;
+    autoLoop = COMPACT;
+    rerun();
+    play(true);
+  }
   for (const preset of PRESETS) {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.preset = preset.id;
     button.innerHTML = `${preset.label}<small>${preset.intensity} mm/h, ${preset.hours < 1 ? `${preset.hours * 60} min` : `${preset.hours} h`}</small>`;
-    button.addEventListener("click", () => {
-      state.intensity = preset.intensity;
-      state.hours = preset.hours;
-      $("intensity").value = preset.intensity;
-      $("hours").value = preset.hours;
-      state.minute = 0;
-      rerun();
-      play(true);
-    });
-    presets.appendChild(button);
+    button.addEventListener("click", () => choosePreset(preset));
+    $("presets").appendChild(button);
+
+    const icon = document.createElement("button");
+    icon.type = "button";
+    icon.className = "icon";
+    icon.dataset.preset = preset.id;
+    icon.title = preset.label;
+    icon.setAttribute("aria-label", preset.label);
+    icon.innerHTML = svg(preset.id);
+    icon.addEventListener("click", () => choosePreset(preset));
+    $("mini-storms").appendChild(icon);
   }
-  $("intensity").addEventListener("input", (event) => { state.intensity = Number(event.target.value); rerun(); });
-  $("hours").addEventListener("input", (event) => { state.hours = Number(event.target.value); rerun(); });
+  $("mini-play").addEventListener("click", () => { autoLoop = COMPACT && !state.playing; play(!state.playing); });
+  $("mini-time").addEventListener("input", (event) => { autoLoop = false; state.minute = Number(event.target.value); render(); });
+  $("mini-labels").innerHTML = svg("labels");
+  $("mini-labels").addEventListener("click", (event) => {
+    labelLayer.visible = !labelLayer.visible;
+    event.currentTarget.setAttribute("aria-pressed", String(labelLayer.visible));
+  });
+  // Moving a rain slider while paused in a dry minute jumps to full rain, so the change shows in the view.
+  function showRain() {
+    if (!state.playing && !(state.records[state.minute]?.rain > 0)) state.minute = STORM_START + Math.min(10, state.hours * 30);
+  }
+  $("intensity").addEventListener("input", (event) => { state.intensity = Number(event.target.value); showRain(); rerun(); });
+  $("hours").addEventListener("input", (event) => { state.hours = Number(event.target.value); showRain(); rerun(); });
   for (const radio of document.querySelectorAll("input[name=ground]")) {
     radio.addEventListener("change", (event) => { state.ground = event.target.value; rerun(); });
   }
@@ -269,7 +307,9 @@ async function main() {
     state.playing = on;
     $("play").textContent = on ? "Pause" : "Play";
     $("play").setAttribute("aria-pressed", String(on));
-    if (on && state.minute >= state.records.length - 1) state.minute = 0;
+    $("mini-play").innerHTML = svg(on ? "pause" : "play");
+    $("mini-play").setAttribute("aria-label", on ? "Pause" : "Play");
+    if (on && state.minute >= state.records.length - 1) state.minute = STORM_START;
     last = null;
     if (on) requestAnimationFrame(tick);
   }
@@ -282,7 +322,11 @@ async function main() {
         carry -= steps;
         state.minute = Math.min(state.records.length - 1, state.minute + steps);
         render();
-        if (state.minute === state.records.length - 1) { play(false); return; }
+        if (state.minute === state.records.length - 1) {
+          play(false);
+          if (autoLoop) setTimeout(() => { if (autoLoop && !state.playing) play(true); }, LOOP_PAUSE_MS);
+          return;
+        }
       }
     }
     last = now;
@@ -290,6 +334,8 @@ async function main() {
   }
 
   rerun();
+  $("mini-play").innerHTML = svg("play");
+  if (autoLoop) play(true);
   window.__overflowScene = { view, state, ORIGIN, LIFT };  // for debugging in the console
 }
 
