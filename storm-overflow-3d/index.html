@@ -11,7 +11,11 @@
 <body>
   <div id="view" aria-label="3D cutaway of a storm overflow"></div>
 
+  <button id="show-panel" class="show-panel" type="button" hidden>Controls</button>
   <aside id="panel">
+    <div id="resize" class="resize" role="separator" aria-label="Resize the controls" tabindex="0"></div>
+    <button id="hide-panel" class="hide-panel" type="button" aria-label="Hide the controls" title="Hide the controls">&times;</button>
+    <div class="panel-body">
     <section aria-labelledby="storm-heading">
       <h2 id="storm-heading">Storm</h2>
       <div id="presets" class="presets"></div>
@@ -41,13 +45,20 @@
       <input id="time" type="range" min="0" max="719" value="0" aria-label="Time" />
     </section>
 
+    <section aria-labelledby="run-heading">
+      <h2 id="run-heading">This storm</h2>
+      <svg id="chart" role="img" aria-label="Rain, street flooding, flow to the works and spill over the 12 hours"></svg>
+      <p class="key"><span class="k-rain"></span>rain <span class="k-flood"></span>street floods <span class="k-works"></span>to works <span class="k-spill"></span>spill <span class="k-band"></span>monitor logs a spill</p>
+    </section>
+
     <section class="views" aria-label="Views">
       <button type="button" data-view="overview">Overview</button>
       <button type="button" data-view="street">Street</button>
       <button type="button" data-view="chamber">Chamber</button>
       <button type="button" data-view="outfall">Outfall</button>
-      <label class="labels-toggle"><input id="labels" type="checkbox" checked /> Labels</label>
+      <label class="labels-toggle" title="Or click a part of the model to label it"><input id="labels" type="checkbox" /> All labels</label>
     </section>
+    </div>
   </aside>
 
   <!-- ?compact: a slim icon bar in place of the panel, for small embeds -->
@@ -56,7 +67,7 @@
     <button id="mini-play" class="icon" type="button" aria-label="Play" aria-pressed="false"></button>
     <input id="mini-time" type="range" min="0" max="719" value="0" aria-label="Time" />
     <span class="mini-status" role="status"><i aria-hidden="true"></i><span id="mini-status-text"></span></span>
-    <button id="mini-labels" class="icon" type="button" aria-label="Labels" title="Labels" aria-pressed="true"></button>
+    <button id="mini-labels" class="icon" type="button" aria-label="Labels" title="Labels" aria-pressed="false"></button>
   </div>
 
   <div id="error" role="alert" hidden></div>

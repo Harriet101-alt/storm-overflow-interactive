@@ -2,7 +2,8 @@
 // storage model (model.js, geometry.js), the SDK's rain, and the controls.
 
 import { LIFT, ORIGIN, toLonLat, waterAt } from "./geometry.js";
-import { GROUND, PRESETS, STORM_START, formatClock, monitorText, simulate } from "./model.js";
+import { drawChart } from "./chart.js";
+import { GROUND, PRESETS, STORM_START, formatClock, monitorText, simulate, summary } from "./model.js";
 
 const [
   Map, SceneView, Ground, Graphic, GraphicsLayer, Camera, Point, Polygon, SpatialReference, Mesh, MeshComponent,
@@ -125,11 +126,17 @@ async function main() {
   const waterLayer = new GraphicsLayer({ title: "Water" });
   const surfaceLayer = new GraphicsLayer({ title: "Water surfaces", elevationInfo: { mode: "absolute-height" } });
   const labelLayer = new GraphicsLayer({ title: "Labels", elevationInfo: { mode: "absolute-height" } });
+  // Labels stay hidden: clicking the model shows the nearest one, "All labels" shows every one.
+  const labels = [];
+  let allLabels = false;
+  function showLabels(only) {
+    for (const label of labels) label.visible = allLabels || label === only;
+  }
   for (const label of structure.labels) {
     const text = COMPACT ? SHORT_LABELS[label.text] : label.text;
     if (!text) continue;
     const [longitude, latitude, z] = toLonLat(label.x, label.y, label.z);
-    labelLayer.add(new Graphic({
+    labels.push(new Graphic({
       geometry: new Point({ longitude, latitude, z, spatialReference: WGS84 }),
       symbol: new PointSymbol3D({
         symbolLayers: [new TextSymbol3DLayer({
@@ -141,6 +148,9 @@ async function main() {
       }),
     }));
   }
+
+  labelLayer.addMany(labels);
+  showLabels(null);
 
   const water = {
     sewer: new Graphic({ symbol: meshSymbol(false) }),
@@ -175,17 +185,24 @@ async function main() {
   });
   await view.when();
   // Keep the model clear of the panel (beside it on a wide screen, above it on a phone) or the compact bar.
+  // The padding follows the panel's actual size, so it stays right as the panel is resized or hidden.
+  const panel = $("panel");
+  const narrow = () => window.innerWidth <= 700;
   const pad = () => {
-    view.padding = COMPACT ? { bottom: 48 }
-      : window.innerWidth > 700 ? { left: 392 } : { bottom: Math.round(window.innerHeight * 0.52) };
+    if (COMPACT) { view.padding = { bottom: 48 }; return; }
+    if (panel.classList.contains("hidden")) { view.padding = {}; return; }
+    const box = panel.getBoundingClientRect();
+    view.padding = narrow() ? { bottom: Math.round(window.innerHeight - box.top) } : { left: Math.round(box.right + 16) };
   };
-  pad();
+  new ResizeObserver(pad).observe(panel);
   window.addEventListener("resize", pad);
+  setupPanel(panel, narrow, pad);
 
   const materials = {
     sewage: material(WATER.sewage), storm: material(WATER.storm), spill: material(WATER.spill), river: material(WATER.river),
   };
   let weatherKey = "";
+  let moveCursor = () => {};
 
   function render() {
     const record = state.records[state.minute];
@@ -203,6 +220,7 @@ async function main() {
     }
     updateWeather(record);
     updateReadouts(record);
+    moveCursor(state.minute);
     $("time").value = state.minute;
     $("mini-time").value = state.minute;
   }
@@ -236,6 +254,7 @@ async function main() {
 
   function rerun() {
     state.records = simulate({ intensity: state.intensity, hours: state.hours, ground: state.ground });
+    moveCursor = drawChart($("chart"), state.records, summary(state.records).events);
     $("time").max = state.records.length - 1;
     $("mini-time").max = state.records.length - 1;
     $("intensity-value").textContent = `${state.intensity} mm/h`;
@@ -281,8 +300,9 @@ async function main() {
   $("mini-time").addEventListener("input", (event) => { autoLoop = false; state.minute = Number(event.target.value); render(); });
   $("mini-labels").innerHTML = svg("labels");
   $("mini-labels").addEventListener("click", (event) => {
-    labelLayer.visible = !labelLayer.visible;
-    event.currentTarget.setAttribute("aria-pressed", String(labelLayer.visible));
+    allLabels = !allLabels;
+    showLabels(null);
+    event.currentTarget.setAttribute("aria-pressed", String(allLabels));
   });
   // Moving a rain slider while paused in a dry minute jumps to full rain, so the change shows in the view.
   function showRain() {
@@ -297,7 +317,19 @@ async function main() {
   $("time").addEventListener("input", (event) => { state.minute = Number(event.target.value); render(); });
   $("play").addEventListener("click", () => play(!state.playing));
   $("speed").addEventListener("change", (event) => { state.speed = event.target.value; });
-  $("labels").addEventListener("change", (event) => { labelLayer.visible = event.target.checked; });
+  $("labels").addEventListener("change", (event) => { allLabels = event.target.checked; showLabels(null); });
+  let clicked = null;
+  view.on("click", (event) => {
+    if (allLabels) return;
+    let nearest = null, best = 120;  // px: a click further than this from every label clears it
+    for (const label of labels) {
+      const at = view.toScreen(label.geometry);
+      const distance = at ? Math.hypot(at.x - event.x, at.y - event.y) : Infinity;
+      if (distance < best) [nearest, best] = [label, distance];
+    }
+    clicked = nearest === clicked ? null : nearest;
+    showLabels(clicked);
+  });
   for (const button of document.querySelectorAll("[data-view]")) {
     button.addEventListener("click", () => view.goTo(camera(button.dataset.view), { duration: 1500 }));
   }
@@ -337,6 +369,54 @@ async function main() {
   $("mini-play").innerHTML = svg("play");
   if (autoLoop) play(true);
   window.__overflowScene = { view, state, ORIGIN, LIFT };  // for debugging in the console
+}
+
+// Drag the panel's edge (right edge on a wide screen, top on a phone) or use the arrow keys on it to resize.
+function setupPanel(panel, narrow, onChange) {
+  const root = document.documentElement.style;
+  const handle = $("resize");
+  handle.setAttribute("aria-orientation", narrow() ? "horizontal" : "vertical");
+  const limits = () => narrow()
+    ? { min: 120, max: Math.round(window.innerHeight * 0.85) }
+    : { min: 240, max: Math.min(640, Math.round(window.innerWidth * 0.6)) };
+  const set = (px) => {
+    const { min, max } = limits();
+    const size = Math.round(Math.min(max, Math.max(min, px)));
+    root.setProperty(narrow() ? "--panel-h" : "--panel-w", `${size}px`);
+    try { localStorage.setItem(narrow() ? "panelH" : "panelW", String(size)); } catch { /* storage blocked */ }
+    onChange();
+  };
+  try {
+    const w = localStorage.getItem("panelW"), h = localStorage.getItem("panelH");
+    if (w) root.setProperty("--panel-w", `${w}px`);
+    if (h) root.setProperty("--panel-h", `${h}px`);
+  } catch { /* storage blocked */ }
+  handle.addEventListener("pointerdown", (event) => {
+    handle.setPointerCapture(event.pointerId);
+    handle.classList.add("dragging");
+    const move = (e) => set(narrow() ? window.innerHeight - e.clientY : e.clientX - panel.getBoundingClientRect().left);
+    const up = () => {
+      handle.classList.remove("dragging");
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+  });
+  handle.addEventListener("keydown", (event) => {
+    const step = { ArrowRight: 20, ArrowUp: 20, ArrowLeft: -20, ArrowDown: -20 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const box = panel.getBoundingClientRect();
+    set((narrow() ? box.height : box.width) + step);
+  });
+  const toggle = (hide) => {
+    panel.classList.toggle("hidden", hide);
+    $("show-panel").hidden = !hide;
+    onChange();
+  };
+  $("hide-panel").addEventListener("click", () => toggle(true));
+  $("show-panel").addEventListener("click", () => toggle(false));
 }
 
 main().catch((error) => {
