@@ -10,6 +10,7 @@ It is not a real site and not a hydraulic model.
 | `index.html`, `css/style.css` | Page and controls |
 | `js/app.js` | Scene: static model, moving water, SDK rain, cameras, playback |
 | `js/model.js` | Storage model: rain -> runoff, sewage, infiltration -> chamber level -> works / weir / street |
+| `js/chart.js` | SVG chart of the run: rain, street flooding, flow to the works, spill |
 | `js/geometry.js` | Water meshes and surfaces; model metres -> longitude/latitude |
 | `data/structure.json` | Static geometry from `src/cutaway.py` (regenerate: `python scripts\stages\build_overflow_web_model.py`) |
 | `test/model.test.mjs` | Model tests: `node --test web/storm-overflow-3d/test/model.test.mjs` |
